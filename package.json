@@ -4,7 +4,7 @@
   "description": "GovClaw — run OpenClaw inside OpenShell with gov-ready inference (fork of NemoClaw)",
   "license": "Apache-2.0",
   "bin": {
-    "govclaw": "./bin/nemoclaw.js",
+    "govclaw": "./bin/govclaw.js",
     "nemoclaw": "./bin/nemoclaw.js"
   },
   "scripts": {

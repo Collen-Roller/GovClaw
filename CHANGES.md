@@ -57,19 +57,21 @@ adding features for secure AI agent sandboxing in government and defense environ
   env var documentation.
 - `test/policies.test.js` — Updated preset count (9 → 10) and name list to include `mattermost`.
 
-### Rebranding — GovClaw Fork
+### GovClaw Fork — Separate Files (no upstream modifications)
 
-- **Package identity**: `package.json` name changed from `nemoclaw` to `govclaw`
-- **CLI binary**: Added `govclaw` as primary CLI command (alongside `nemoclaw` for compat)
-- **ASCII banner**: New GOVCLAW banner in `install.sh`, tagline updated
-- **Installer messages**: All user-facing strings updated (step headers, runtime messages,
-  help text, version output)
-- **CLI help**: `bin/nemoclaw.js` — all command examples now show `govclaw <cmd>`
-- **Plugin identity**: `openclaw.plugin.json` — id/name changed to `govclaw`/`GovClaw`
-- **Slash commands**: All chat-facing text in `nemoclaw/src/commands/slash.ts` updated
-  (status, onboard, eject messages)
-- **Plugin registration**: Banner log shows "GovClaw registered"
-- **Sandbox start script**: Boot message updated to "Setting up GovClaw..."
-- **Internal paths preserved**: `~/.nemoclaw/` config dir, gateway name `nemoclaw`,
-  and TypeScript interface names (e.g. `NemoClawOnboardConfig`) kept for backward
-  compatibility with existing installations
+GovClaw branding lives in dedicated files to avoid merge conflicts
+when pulling upstream NemoClaw changes:
+
+- **`govclaw-install.sh`** — Standalone installer that sources `install.sh`
+  and overrides `print_banner`, `print_done`, and `usage` with GovClaw
+  branding. Run `bash govclaw-install.sh` instead of `bash install.sh`.
+- **`bin/govclaw.js`** — CLI entrypoint with GovClaw help text. Intercepts
+  `help`/`--version` for branding, delegates all other commands to
+  `bin/nemoclaw.js`. Registered as `govclaw` binary in `package.json`.
+- **`package.json`** — Name set to `govclaw`, adds `govclaw` bin entry
+  pointing to `bin/govclaw.js`.
+- **`nemoclaw/openclaw.plugin.json`** — Plugin id/name set to `govclaw`/`GovClaw`.
+- **`nemoclaw/src/commands/slash.ts`** — Chat-facing messages show GovClaw branding.
+- **`nemoclaw/src/index.ts`** — Plugin registration banner shows "GovClaw registered".
+- **Upstream files untouched**: `install.sh`, `bin/nemoclaw.js`,
+  `scripts/nemoclaw-start.sh` remain as-is from NemoClaw upstream.

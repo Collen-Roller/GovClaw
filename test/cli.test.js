@@ -94,7 +94,7 @@ describe("CLI dispatch", () => {
     const r = run("help");
     expect(r.code).toBe(0);
     expect(r.out.includes("Troubleshooting")).toBeTruthy();
-    expect(r.out.includes("govclaw debug")).toBeTruthy();
+    expect(r.out.includes("nemoclaw debug")).toBeTruthy();
   });
 
   it("passes --follow through to openshell logs", () => {

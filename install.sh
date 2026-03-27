@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# GovClaw installer — installs Node.js, Ollama (if GPU present), and GovClaw.
+# NemoClaw installer — installs Node.js, Ollama (if GPU present), and NemoClaw.
 
 set -euo pipefail
 
@@ -111,14 +111,14 @@ step() {
 print_banner() {
   printf "\n"
   # ANSI Shadow ASCII art — hand-crafted, no figlet dependency
-  printf "  ${C_GREEN}${C_BOLD}  ██████╗  ██████╗ ██╗   ██╗ ██████╗██╗      █████╗ ██╗    ██╗${C_RESET}\n"
-  printf "  ${C_GREEN}${C_BOLD} ██╔════╝ ██╔═══██╗██║   ██║██╔════╝██║     ██╔══██╗██║    ██║${C_RESET}\n"
-  printf "  ${C_GREEN}${C_BOLD} ██║  ███╗██║   ██║██║   ██║██║     ██║     ███████║██║ █╗ ██║${C_RESET}\n"
-  printf "  ${C_GREEN}${C_BOLD} ██║   ██║██║   ██║╚██╗ ██╔╝██║     ██║     ██╔══██║██║███╗██║${C_RESET}\n"
-  printf "  ${C_GREEN}${C_BOLD} ╚██████╔╝╚██████╔╝ ╚████╔╝ ╚██████╗███████╗██║  ██║╚███╔███╔╝${C_RESET}\n"
-  printf "  ${C_GREEN}${C_BOLD}  ╚═════╝  ╚═════╝   ╚═══╝   ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ███╗   ██╗███████╗███╗   ███╗ ██████╗  ██████╗██╗      █████╗ ██╗    ██╗${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ████╗  ██║██╔════╝████╗ ████║██╔═══██╗██╔════╝██║     ██╔══██╗██║    ██║${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ██╔██╗ ██║█████╗  ██╔████╔██║██║   ██║██║     ██║     ███████║██║ █╗ ██║${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ██║╚██╗██║██╔══╝  ██║╚██╔╝██║██║   ██║██║     ██║     ██╔══██║██║███╗██║${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ██║ ╚████║███████╗██║ ╚═╝ ██║╚██████╔╝╚██████╗███████╗██║  ██║╚███╔███╔╝${C_RESET}\n"
+  printf "  ${C_GREEN}${C_BOLD} ╚═╝  ╚═══╝╚══════╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝${C_RESET}\n"
   printf "\n"
-  printf "  ${C_DIM}Gov-ready OpenClaw sandbox.  v%s  (fork of NemoClaw)${C_RESET}\n" "$NEMOCLAW_VERSION"
+  printf "  ${C_DIM}Launch OpenClaw in an OpenShell sandbox.  v%s${C_RESET}\n" "$NEMOCLAW_VERSION"
   printf "\n"
 }
 
@@ -128,7 +128,7 @@ print_done() {
   sandbox_name="$(resolve_default_sandbox_name)"
   info "=== Installation complete ==="
   printf "\n"
-  printf "  ${C_GREEN}${C_BOLD}GovClaw${C_RESET}  ${C_DIM}(%ss)${C_RESET}\n" "$elapsed"
+  printf "  ${C_GREEN}${C_BOLD}NemoClaw${C_RESET}  ${C_DIM}(%ss)${C_RESET}\n" "$elapsed"
   printf "\n"
   printf "  ${C_GREEN}Your OpenClaw Sandbox is live.${C_RESET}\n"
   printf "  ${C_DIM}Sandbox in, break things, and tell us what you find.${C_RESET}\n"
@@ -144,7 +144,7 @@ print_done() {
 
 usage() {
   printf "\n"
-  printf "  ${C_BOLD}GovClaw Installer${C_RESET}  ${C_DIM}v%s${C_RESET}\n\n" "$NEMOCLAW_VERSION"
+  printf "  ${C_BOLD}NemoClaw Installer${C_RESET}  ${C_DIM}v%s${C_RESET}\n\n" "$NEMOCLAW_VERSION"
   printf "  ${C_DIM}Usage:${C_RESET}\n"
   printf "    curl -fsSL https://www.nvidia.com/nemoclaw.sh | bash\n"
   printf "    curl -fsSL https://www.nvidia.com/nemoclaw.sh | bash -s -- [options]\n\n"
@@ -158,10 +158,7 @@ usage() {
   printf "    NEMOCLAW_SANDBOX_NAME         Sandbox name to create/use\n"
   printf "    NEMOCLAW_RECREATE_SANDBOX=1   Recreate an existing sandbox\n"
   printf "    NEMOCLAW_INSTALL_TAG         Git ref to install (default: latest release)\n"
-  printf "    NEMOCLAW_PROVIDER             cloud | ollama | nim | vllm | bedrock\n"
-  printf "    AWS_BEARER_TOKEN_BEDROCK       Bedrock API key (simplest auth)\n"
-  printf "    AWS_ACCESS_KEY_ID             IAM access key (alternative to API key)\n"
-  printf "    AWS_SECRET_ACCESS_KEY         IAM secret key (used with access key)\n"
+  printf "    NEMOCLAW_PROVIDER             cloud | ollama | nim | vllm\n"
   printf "    NEMOCLAW_MODEL                Inference model to configure\n"
   printf "    NEMOCLAW_POLICY_MODE          suggested | custom | skip\n"
   printf "    NEMOCLAW_POLICY_PRESETS       Comma-separated policy presets\n"
@@ -219,7 +216,7 @@ command_exists() { command -v "$1" &>/dev/null; }
 MIN_NODE_MAJOR=20
 MIN_NPM_MAJOR=10
 RECOMMENDED_NODE_MAJOR=22
-RUNTIME_REQUIREMENT_MSG="GovClaw requires Node.js >=${MIN_NODE_MAJOR} and npm >=${MIN_NPM_MAJOR} (recommended Node.js ${RECOMMENDED_NODE_MAJOR})."
+RUNTIME_REQUIREMENT_MSG="NemoClaw requires Node.js >=${MIN_NODE_MAJOR} and npm >=${MIN_NPM_MAJOR} (recommended Node.js ${RECOMMENDED_NODE_MAJOR})."
 NEMOCLAW_SHIM_DIR="${HOME}/.local/bin"
 ORIGINAL_PATH="${PATH:-}"
 
@@ -628,7 +625,7 @@ main() {
   install_nodejs
   ensure_supported_runtime
 
-  step 2 "GovClaw CLI"
+  step 2 "NemoClaw CLI"
   # install_or_upgrade_ollama
   install_nemoclaw
   verify_nemoclaw

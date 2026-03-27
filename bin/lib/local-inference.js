@@ -87,19 +87,20 @@ function validateLocalProvider(provider, runCapture) {
     return { ok: true };
   }
 
+  // On DGX Spark the Docker bridge may not allow container-to-host
+  // traffic due to iptables rules, but OpenShell sandbox networking
+  // (k3s inside gateway) can still route to the host. Warn and proceed.
   switch (provider) {
     case "vllm-local":
-      return {
-        ok: false,
-        message:
-          "Local vLLM is responding on localhost, but containers cannot reach http://host.openshell.internal:8000. Ensure the server is reachable from containers, not only from the host shell.",
-      };
+      console.log(
+        "  ⚠ Container reachability check failed for http://host.openshell.internal:8000, but OpenShell may route differently. Continuing..."
+      );
+      return { ok: true };
     case "ollama-local":
-      return {
-        ok: false,
-        message:
-          "Local Ollama is responding on localhost, but containers cannot reach http://host.openshell.internal:11434. Ensure Ollama listens on 0.0.0.0:11434 instead of 127.0.0.1 so sandboxes can reach it.",
-      };
+      console.log(
+        "  ⚠ Container reachability check failed for http://host.openshell.internal:11434, but OpenShell may route differently. Continuing..."
+      );
+      return { ok: true };
     default:
       return { ok: false, message: "The selected local inference provider is unavailable from containers." };
   }

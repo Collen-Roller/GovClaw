@@ -486,7 +486,7 @@ exit 0
 
     expect(result.status).toBe(0);
     const output = `${result.stdout}${result.stderr}`;
-    expect(output).toMatch(/GovClaw Installer/);
+    expect(output).toMatch(/NemoClaw Installer/);
     expect(output).toMatch(/--non-interactive/);
     expect(output).toMatch(/--version/);
     expect(output).toMatch(/NEMOCLAW_PROVIDER/);

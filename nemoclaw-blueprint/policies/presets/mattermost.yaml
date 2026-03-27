@@ -21,3 +21,5 @@ network_policies:
           - allow: { method: DELETE, path: "/api/v4/**" }
           - allow: { method: GET, path: "/hooks/**" }
           - allow: { method: POST, path: "/hooks/**" }
+    binaries:
+      - { path: /usr/local/bin/openclaw }
