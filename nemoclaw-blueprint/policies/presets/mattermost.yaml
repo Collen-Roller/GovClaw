@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+preset:
+  name: mattermost
+  description: "Mattermost API and webhook access"
+
+network_policies:
+  mattermost:
+    name: mattermost
+    endpoints:
+      - host: "*.cloud.mattermost.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: GET, path: "/api/v4/**" }
+          - allow: { method: POST, path: "/api/v4/**" }
+          - allow: { method: PUT, path: "/api/v4/**" }
+          - allow: { method: DELETE, path: "/api/v4/**" }
+          - allow: { method: GET, path: "/hooks/**" }
+          - allow: { method: POST, path: "/hooks/**" }

@@ -1,9 +1,10 @@
 {
-  "name": "nemoclaw",
+  "name": "govclaw",
   "version": "0.1.0",
-  "description": "NemoClaw — run OpenClaw inside OpenShell with NVIDIA inference",
+  "description": "GovClaw — run OpenClaw inside OpenShell with gov-ready inference (fork of NemoClaw)",
   "license": "Apache-2.0",
   "bin": {
+    "govclaw": "./bin/nemoclaw.js",
     "nemoclaw": "./bin/nemoclaw.js"
   },
   "scripts": {

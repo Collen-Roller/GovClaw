@@ -9,7 +9,7 @@ describe("policies", () => {
   describe("listPresets", () => {
     it("returns all 9 presets", () => {
       const presets = policies.listPresets();
-      expect(presets.length).toBe(9);
+      expect(presets.length).toBe(10);
     });
 
     it("each preset has name and description", () => {
@@ -29,6 +29,7 @@ describe("policies", () => {
         "docker",
         "huggingface",
         "jira",
+        "mattermost",
         "npm",
         "outlook",
         "pypi",

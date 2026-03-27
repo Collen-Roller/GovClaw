@@ -17,8 +17,8 @@ const mockedLoadOnboardConfig = vi.mocked(loadOnboardConfig);
 
 function createMockApi(): OpenClawPluginApi {
   return {
-    id: "nemoclaw",
-    name: "NemoClaw",
+    id: "govclaw",
+    name: "GovClaw",
     version: "0.1.0",
     config: {},
     pluginConfig: {},

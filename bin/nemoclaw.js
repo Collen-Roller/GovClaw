@@ -380,7 +380,7 @@ async function deploy(instanceName) {
   const gpu = process.env.NEMOCLAW_GPU || "a2-highgpu-1g:nvidia-tesla-a100:1";
 
   console.log("");
-  console.log(`  Deploying NemoClaw to Brev instance: ${name}`);
+  console.log(`  Deploying GovClaw to Brev instance: ${name}`);
   console.log("");
 
   try {
@@ -425,7 +425,7 @@ async function deploy(instanceName) {
     }
   }
 
-  console.log("  Syncing NemoClaw to VM...");
+  console.log("  Syncing GovClaw to VM...");
   run(`ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR ${qname} 'mkdir -p /home/ubuntu/nemoclaw'`);
   run(`rsync -az --delete --exclude node_modules --exclude .git --exclude src -e "ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR" "${ROOT}/scripts" "${ROOT}/Dockerfile" "${ROOT}/nemoclaw" "${ROOT}/nemoclaw-blueprint" "${ROOT}/bin" "${ROOT}/package.json" ${qname}:/home/ubuntu/nemoclaw/`);
 
@@ -709,47 +709,46 @@ async function sandboxDestroy(sandboxName, args = []) {
 function help() {
   const pkg = require(path.join(__dirname, "..", "package.json"));
   console.log(`
-  ${B}${G}NemoClaw${R}  ${D}v${pkg.version}${R}
-  ${D}Deploy more secure, always-on AI assistants with a single command.${R}
+  ${B}${G}GovClaw${R}  ${D}v${pkg.version}${R}  ${D}(fork of NemoClaw)${R}
+  ${D}Gov-ready, secure AI agent sandboxing with a single command.${R}
 
   ${G}Getting Started:${R}
-    ${B}nemoclaw onboard${R}                 Configure inference endpoint and credentials
-    nemoclaw setup-spark             Set up on DGX Spark ${D}(fixes cgroup v2 + Docker)${R}
+    ${B}govclaw onboard${R}                  Configure inference endpoint and credentials
+    govclaw setup-spark              Set up on DGX Spark ${D}(fixes cgroup v2 + Docker)${R}
 
   ${G}Sandbox Management:${R}
-    ${B}nemoclaw list${R}                    List all sandboxes
-    nemoclaw <name> connect          Shell into a running sandbox
-    nemoclaw <name> status           Sandbox health + NIM status
-    nemoclaw <name> logs ${D}[--follow]${R}  Stream sandbox logs
-    nemoclaw <name> destroy          Stop NIM + delete sandbox ${D}(--yes to skip prompt)${R}
+    ${B}govclaw list${R}                     List all sandboxes
+    govclaw <name> connect           Shell into a running sandbox
+    govclaw <name> status            Sandbox health + NIM status
+    govclaw <name> logs ${D}[--follow]${R}   Stream sandbox logs
+    govclaw <name> destroy           Stop NIM + delete sandbox ${D}(--yes to skip prompt)${R}
 
   ${G}Policy Presets:${R}
-    nemoclaw <name> policy-add       Add a network or filesystem policy preset
-    nemoclaw <name> policy-list      List presets ${D}(● = applied)${R}
+    govclaw <name> policy-add        Add a network or filesystem policy preset
+    govclaw <name> policy-list       List presets ${D}(● = applied)${R}
 
   ${G}Deploy:${R}
-    nemoclaw deploy <instance>       Deploy to a Brev VM and start services
+    govclaw deploy <instance>        Deploy to a Brev VM and start services
 
   ${G}Services:${R}
-    nemoclaw start                   Start auxiliary services ${D}(Telegram, tunnel)${R}
-    nemoclaw stop                    Stop all services
-    nemoclaw status                  Show sandbox list and service status
+    govclaw start                    Start auxiliary services ${D}(Telegram, tunnel)${R}
+    govclaw stop                     Stop all services
+    govclaw status                   Show sandbox list and service status
 
   Troubleshooting:
-    nemoclaw debug [--quick]         Collect diagnostics for bug reports
-    nemoclaw debug --output FILE     Save diagnostics tarball for GitHub issues
+    govclaw debug [--quick]          Collect diagnostics for bug reports
+    govclaw debug --output FILE      Save diagnostics tarball for GitHub issues
 
   Cleanup:
-    nemoclaw uninstall [flags]       Run uninstall.sh (local first, curl fallback)
+    govclaw uninstall [flags]        Run uninstall.sh (local first, curl fallback)
 
   ${G}Uninstall flags:${R}
     --yes                            Skip the confirmation prompt
     --keep-openshell                 Leave the openshell binary installed
-    --delete-models                  Remove NemoClaw-pulled Ollama models
+    --delete-models                  Remove GovClaw-pulled Ollama models
 
   ${D}Powered by NVIDIA OpenShell · Nemotron · Agent Toolkit
   Credentials saved in ~/.nemoclaw/credentials.json (mode 600)${R}
-  ${D}https://www.nvidia.com/nemoclaw${R}
 `);
 }
 

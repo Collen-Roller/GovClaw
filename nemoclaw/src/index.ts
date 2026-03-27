@@ -238,7 +238,7 @@ export default function register(api: OpenClawPluginApi): void {
   // 1. Register /nemoclaw slash command (chat interface)
   api.registerCommand({
     name: "nemoclaw",
-    description: "NemoClaw sandbox management (status, eject).",
+    description: "GovClaw sandbox management (status, eject).",
     acceptsArgs: true,
     handler: (ctx) => handleSlashCommand(ctx, api),
   });
@@ -254,7 +254,7 @@ export default function register(api: OpenClawPluginApi): void {
 
   api.logger.info("");
   api.logger.info("  ┌─────────────────────────────────────────────────────┐");
-  api.logger.info("  │  NemoClaw registered                                │");
+  api.logger.info("  │  GovClaw registered                                 │");
   api.logger.info("  │                                                     │");
   api.logger.info(`  │  Endpoint:  ${bannerEndpoint.padEnd(40)}│`);
   api.logger.info(`  │  Provider:  ${bannerProvider.padEnd(40)}│`);

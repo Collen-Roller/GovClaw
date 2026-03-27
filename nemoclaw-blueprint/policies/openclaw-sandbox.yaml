@@ -99,6 +99,36 @@ network_policies:
       - { path: /usr/bin/gh }
       - { path: /usr/bin/git }
 
+  # ── AWS Bedrock inference ───────────────────────────────────────────
+  bedrock:
+    name: bedrock
+    endpoints:
+      - host: "*.amazonaws.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        tls: terminate
+        rules:
+          - allow: { method: POST, path: "/model/*/invoke" }
+          - allow: { method: POST, path: "/model/*/converse" }
+          - allow: { method: POST, path: "/model/*/converse-stream" }
+          - allow: { method: POST, path: "/**" }
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+
+  # ── Local NIM inference ─────────────────────────────────────────────
+  nim_local:
+    name: nim_local
+    endpoints:
+      - host: host.docker.internal
+        port: 8000
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: "*", path: "/**" }
+    binaries:
+      - { path: /usr/local/bin/openclaw }
+
   # ── OpenClaw "phone home" ────────────────────────────────────────────
   # Minimum viable set for OpenClaw to authenticate, discover plugins,
   # and reach ClawHub. Binary-restricted to openclaw only.

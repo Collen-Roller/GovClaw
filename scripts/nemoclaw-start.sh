@@ -207,7 +207,7 @@ PYAUTOPAIR
 
 # ── Main ─────────────────────────────────────────────────────────
 
-echo 'Setting up NemoClaw...'
+echo 'Setting up GovClaw...'
 [ -f .env ] && chmod 600 .env
 
 # ── Non-root fallback ──────────────────────────────────────────

@@ -21,7 +21,9 @@ const {
   validateLocalProvider,
 } = require("./local-inference");
 const {
+  BEDROCK_MODEL_OPTIONS,
   CLOUD_MODEL_OPTIONS,
+  DEFAULT_BEDROCK_MODEL,
   DEFAULT_CLOUD_MODEL,
   getProviderSelectionConfig,
 } = require("./inference-config");
@@ -979,6 +981,140 @@ async function promptCloudModel() {
   );
 }
 
+async function promptBedrockModel() {
+  console.log("");
+  console.log("  Bedrock models:");
+  BEDROCK_MODEL_OPTIONS.forEach((option, index) => {
+    console.log(`    ${index + 1}) ${option.label} (${option.id})`);
+  });
+  console.log("");
+
+  const choice = await prompt("  Choose model [1]: ");
+  const index = parseInt(choice || "1", 10) - 1;
+  return (BEDROCK_MODEL_OPTIONS[index] || BEDROCK_MODEL_OPTIONS[0]).id;
+}
+
+function detectAwsProfiles() {
+  const credFile = path.join(os.homedir(), ".aws", "credentials");
+  try {
+    const content = fs.readFileSync(credFile, "utf-8");
+    const profiles = [];
+    for (const line of content.split(/\r?\n/)) {
+      const m = line.match(/^\[(.+)\]$/);
+      if (m) profiles.push(m[1]);
+    }
+    return profiles;
+  } catch {
+    return [];
+  }
+}
+
+function detectAwsRegion() {
+  if (process.env.AWS_REGION) return process.env.AWS_REGION;
+  if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
+  const configFile = path.join(os.homedir(), ".aws", "config");
+  try {
+    const content = fs.readFileSync(configFile, "utf-8");
+    const m = content.match(/^\s*region\s*=\s*(.+)$/m);
+    if (m) return m[1].trim();
+  } catch {}
+  return null;
+}
+
+async function ensureBedrockCredentials() {
+  const hasApiKey = !!process.env.AWS_BEARER_TOKEN_BEDROCK;
+  const hasKeys = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+  const hasProfile = process.env.AWS_PROFILE;
+  const awsProfiles = detectAwsProfiles();
+  const detectedRegion = detectAwsRegion();
+
+  // ── Auth method ────────────────────────────────────────────
+  if (hasApiKey) {
+    console.log("  ✓ Using Bedrock API key from AWS_BEARER_TOKEN_BEDROCK");
+  } else if (hasKeys) {
+    console.log("  ✓ Using AWS IAM credentials from environment");
+  } else if (hasProfile) {
+    console.log(`  ✓ Using AWS profile: ${process.env.AWS_PROFILE}`);
+  } else if (isNonInteractive()) {
+    if (awsProfiles.length > 0) {
+      process.env.AWS_PROFILE = awsProfiles.includes("default") ? "default" : awsProfiles[0];
+      console.log(`  [non-interactive] Using AWS profile: ${process.env.AWS_PROFILE}`);
+    } else {
+      console.error("  AWS credentials are required for Bedrock in non-interactive mode.");
+      console.error("  Set AWS_BEARER_TOKEN_BEDROCK (API key), or");
+      console.error("      AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or AWS_PROFILE.");
+      process.exit(1);
+    }
+  } else {
+    const authOptions = [
+      { key: "apikey", label: "Bedrock API key (from AWS console)" },
+    ];
+    if (awsProfiles.length > 0) {
+      authOptions.push({ key: "profile", label: "AWS profile (~/.aws/credentials)" });
+    }
+    authOptions.push({ key: "iam", label: "IAM Access Key + Secret Key" });
+
+    console.log("");
+    console.log("  AWS credential source:");
+    authOptions.forEach((o, i) => {
+      console.log(`    ${i + 1}) ${o.label}`);
+    });
+    console.log("");
+    const authChoice = await prompt("  Choose [1]: ");
+    const authIdx = parseInt(authChoice || "1", 10) - 1;
+    const selected = authOptions[authIdx] || authOptions[0];
+
+    if (selected.key === "apikey") {
+      const apiKey = await prompt("  Bedrock API key: ");
+      if (!apiKey || !apiKey.trim()) {
+        console.error("  Bedrock API key is required.");
+        process.exit(1);
+      }
+      process.env.AWS_BEARER_TOKEN_BEDROCK = apiKey.trim();
+      console.log("  ✓ Bedrock API key set");
+    } else if (selected.key === "profile") {
+      console.log("");
+      console.log("  AWS profiles:");
+      awsProfiles.forEach((p, i) => {
+        console.log(`    ${i + 1}) ${p}`);
+      });
+      console.log("");
+      const defaultProfileIdx = awsProfiles.indexOf("default");
+      const profileDefault = defaultProfileIdx >= 0 ? defaultProfileIdx + 1 : 1;
+      const profileChoice = await prompt(`  Choose profile [${profileDefault}]: `);
+      const pidx = parseInt(profileChoice || String(profileDefault), 10) - 1;
+      const selectedProfile = awsProfiles[pidx] || awsProfiles[profileDefault - 1];
+      process.env.AWS_PROFILE = selectedProfile;
+      console.log(`  ✓ Using AWS profile: ${selectedProfile}`);
+    } else {
+      const accessKey = await prompt("  AWS_ACCESS_KEY_ID: ");
+      const secretKey = await prompt("  AWS_SECRET_ACCESS_KEY: ");
+      if (!accessKey || !secretKey) {
+        console.error("  Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required.");
+        process.exit(1);
+      }
+      process.env.AWS_ACCESS_KEY_ID = accessKey.trim();
+      process.env.AWS_SECRET_ACCESS_KEY = secretKey.trim();
+    }
+  }
+
+  // ── Region ─────────────────────────────────────────────────
+  if (!process.env.AWS_REGION && !process.env.AWS_DEFAULT_REGION) {
+    if (detectedRegion) {
+      process.env.AWS_REGION = detectedRegion;
+      console.log(`  ✓ AWS region (from config): ${detectedRegion}`);
+    } else if (isNonInteractive()) {
+      process.env.AWS_REGION = "us-east-1";
+      console.log("  [non-interactive] Defaulting to AWS region: us-east-1");
+    } else {
+      const entered = await prompt("  AWS region (e.g. us-east-1) [us-east-1]: ");
+      process.env.AWS_REGION = (entered || "").trim() || "us-east-1";
+    }
+  } else {
+    console.log(`  ✓ AWS region: ${process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION}`);
+  }
+}
+
 async function promptRemoteModel(label, providerKey, defaultModel, validator = null) {
   const options = REMOTE_MODEL_OPTIONS[providerKey] || [];
   const defaultIndex = Math.max(0, options.indexOf(defaultModel));
@@ -1193,10 +1329,10 @@ function getNonInteractiveProvider() {
     anthropiccompatible: "anthropicCompatible",
   };
   const normalized = aliases[providerKey] || providerKey;
-  const validProviders = new Set(["build", "openai", "anthropic", "anthropicCompatible", "gemini", "ollama", "custom", "nim-local", "vllm"]);
+  const validProviders = new Set(["build", "openai", "anthropic", "anthropicCompatible", "gemini", "ollama", "custom", "nim-local", "vllm", "bedrock"]);
   if (!validProviders.has(normalized)) {
     console.error(`  Unsupported NEMOCLAW_PROVIDER: ${providerKey}`);
-    console.error("  Valid values: build, openai, anthropic, anthropicCompatible, gemini, ollama, custom, nim-local, vllm");
+    console.error("  Valid values: build, openai, anthropic, anthropicCompatible, gemini, ollama, custom, nim-local, vllm, bedrock");
     process.exit(1);
   }
 
@@ -1228,7 +1364,7 @@ async function preflight() {
 
   const runtime = getContainerRuntime();
   if (isUnsupportedMacosRuntime(runtime)) {
-    console.error("  Podman on macOS is not supported by NemoClaw at this time.");
+    console.error("  Podman on macOS is not supported by GovClaw at this time.");
     console.error("  OpenShell currently depends on Docker host-gateway behavior that Podman on macOS does not provide.");
     console.error("  Use Colima or Docker Desktop on macOS instead.");
     process.exit(1);
@@ -1263,13 +1399,13 @@ async function preflight() {
   const gwInfo = runCaptureOpenshell(["gateway", "info", "-g", GATEWAY_NAME], { ignoreError: true });
   const healthyGateway = isGatewayHealthy(gatewayStatus, gwInfo);
   if (healthyGateway) {
-    console.log("  Reusing existing NemoClaw gateway...");
+    console.log("  Reusing existing GovClaw gateway...");
     runOpenshell(["forward", "stop", "18789"], { ignoreError: true });
     runOpenshell(["gateway", "select", GATEWAY_NAME], { ignoreError: true });
     process.env.OPENSHELL_GATEWAY = GATEWAY_NAME;
     console.log("  ✓ Existing gateway selected");
   } else if (hasStaleGateway(gwInfo)) {
-    console.log("  Cleaning up previous NemoClaw session...");
+    console.log("  Cleaning up previous GovClaw session...");
     runOpenshell(["forward", "stop", "18789"], { ignoreError: true });
     runOpenshell(["gateway", "destroy", "-g", GATEWAY_NAME], { ignoreError: true });
     console.log("  ✓ Previous session cleaned up");
@@ -1278,7 +1414,7 @@ async function preflight() {
   // Required ports — gateway (8080) and dashboard (18789)
   const requiredPorts = [
     { port: 8080, label: "OpenShell gateway" },
-    { port: 18789, label: "NemoClaw dashboard" },
+    { port: 18789, label: "GovClaw dashboard" },
   ];
   for (const { port, label } of requiredPorts) {
     if (port === 8080 && healthyGateway) {
@@ -1618,6 +1754,10 @@ async function setupNim(gpu) {
   options.push({ key: "anthropic", label: "Anthropic" });
   options.push({ key: "anthropicCompatible", label: "Other Anthropic-compatible endpoint" });
   options.push({ key: "gemini", label: "Google Gemini" });
+  options.push({
+    key: "bedrock",
+    label: "AWS Bedrock (Amazon Web Services)",
+  });
   if (hasOllama || ollamaRunning) {
     options.push({
       key: "ollama",
@@ -1981,6 +2121,17 @@ async function setupNim(gpu) {
         continue selectionLoop;
       }
       break;
+    } else if (selected.key === "bedrock") {
+      console.log("  ✓ Using AWS Bedrock");
+      provider = "bedrock";
+      await ensureBedrockCredentials();
+      if (isNonInteractive()) {
+        model = requestedModel || DEFAULT_BEDROCK_MODEL;
+        note(`  [non-interactive] Bedrock model: ${model}`);
+      } else {
+        model = await promptBedrockModel();
+      }
+      break;
     }
   }
   }
@@ -2038,6 +2189,48 @@ async function setupInference(sandboxName, model, provider, endpointUrl = null, 
       console.error(`  ${probe.message}`);
       process.exit(1);
     }
+  } else if (provider === "bedrock") {
+    const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+    const bedrockBaseUrl = `https://bedrock-runtime.${awsRegion}.amazonaws.com`;
+
+    if (process.env.AWS_BEARER_TOKEN_BEDROCK) {
+      // API key auth — register as OpenAI-compatible provider with Bearer token
+      run(
+        `AWS_BEARER_TOKEN_BEDROCK=${shellQuote(process.env.AWS_BEARER_TOKEN_BEDROCK)} ` +
+        `openshell provider create --name bedrock --type openai ` +
+        `--credential "AWS_BEARER_TOKEN_BEDROCK" ` +
+        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || ` +
+        `AWS_BEARER_TOKEN_BEDROCK=${shellQuote(process.env.AWS_BEARER_TOKEN_BEDROCK)} ` +
+        `openshell provider update bedrock ` +
+        `--credential "AWS_BEARER_TOKEN_BEDROCK" ` +
+        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || true`,
+        { ignoreError: true }
+      );
+    } else {
+      // IAM / profile auth
+      const envPairs = [`AWS_REGION=${awsRegion}`];
+      if (process.env.AWS_ACCESS_KEY_ID) envPairs.push(`AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID}`);
+      if (process.env.AWS_SECRET_ACCESS_KEY) envPairs.push(`AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}`);
+      if (process.env.AWS_SESSION_TOKEN) envPairs.push(`AWS_SESSION_TOKEN=${process.env.AWS_SESSION_TOKEN}`);
+      if (process.env.AWS_PROFILE) envPairs.push(`AWS_PROFILE=${process.env.AWS_PROFILE}`);
+
+      const envPrefix = envPairs.join(" ");
+      run(
+        `${envPrefix} ` +
+        `openshell provider create --name bedrock --type openai ` +
+        `--credential "AWS_ACCESS_KEY_ID" ` +
+        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || ` +
+        `${envPrefix} ` +
+        `openshell provider update bedrock ` +
+        `--credential "AWS_ACCESS_KEY_ID" ` +
+        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || true`,
+        { ignoreError: true }
+      );
+    }
+    run(
+      `openshell inference set --no-verify --provider bedrock --model ${shellQuote(model)} 2>/dev/null || true`,
+      { ignoreError: true }
+    );
   }
 
   verifyInferenceRoute(provider, model);
@@ -2090,6 +2283,10 @@ async function setupPolicies(sandboxName) {
   if (getCredential("DISCORD_BOT_TOKEN") || process.env.DISCORD_BOT_TOKEN) {
     suggestions.push("discord");
     console.log("  Auto-detected: DISCORD_BOT_TOKEN → suggesting discord preset");
+  }
+  if (getCredential("MATTERMOST_TOKEN") || process.env.MATTERMOST_TOKEN || process.env.MATTERMOST_URL) {
+    suggestions.push("mattermost");
+    console.log("  Auto-detected: MATTERMOST_TOKEN → suggesting mattermost preset");
   }
 
   const allPresets = policies.listPresets();
@@ -2162,22 +2359,26 @@ async function setupPolicies(sandboxName) {
     });
     console.log("");
 
+    const knownNames = new Set(allPresets.map((p) => p.name));
     const answer = await prompt(`  Apply suggested presets (${suggestions.join(", ")})? [Y/n/list]: `);
+    const trimmed = answer.trim().toLowerCase();
 
-    if (answer.toLowerCase() === "n") {
+    if (trimmed === "n" || trimmed === "no") {
       console.log("  Skipping policy presets.");
       return;
     }
 
-    if (!waitForSandboxReady(sandboxName)) {
-      console.error(`  Sandbox '${sandboxName}' was not ready for policy application.`);
-      process.exit(1);
-    }
+    // Check if the user typed preset names directly (e.g. "discord" or "discord, slack")
+    const typedNames = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    const allArePresets = typedNames.length > 0 && typedNames.every((n) => knownNames.has(n));
 
-    if (answer.toLowerCase() === "list") {
-      // Let user pick
+    if (trimmed === "list") {
       const picks = await prompt("  Enter preset names (comma-separated): ");
       const selected = picks.split(",").map((s) => s.trim()).filter(Boolean);
+      if (!waitForSandboxReady(sandboxName)) {
+        console.error(`  Sandbox '${sandboxName}' was not ready for policy application.`);
+        return;
+      }
       for (const name of selected) {
         try {
           policies.applyPreset(sandboxName, name);
@@ -2190,8 +2391,20 @@ async function setupPolicies(sandboxName) {
           throw err;
         }
       }
+    } else if (allArePresets) {
+      if (!waitForSandboxReady(sandboxName)) {
+        console.error(`  Sandbox '${sandboxName}' was not ready for policy application.`);
+        return;
+      }
+      for (const name of typedNames) {
+        policies.applyPreset(sandboxName, name);
+      }
     } else {
-      // Apply suggested
+      // "Y", "yes", or Enter — apply suggested
+      if (!waitForSandboxReady(sandboxName)) {
+        console.error(`  Sandbox '${sandboxName}' was not ready for policy application.`);
+        return;
+      }
       for (const name of suggestions) {
         try {
           policies.applyPreset(sandboxName, name);
@@ -2283,6 +2496,7 @@ function printDashboard(sandboxName, model, provider, nimContainer = null) {
   else if (provider === "compatible-endpoint") providerLabel = "Other OpenAI-compatible endpoint";
   else if (provider === "vllm-local") providerLabel = "Local vLLM";
   else if (provider === "ollama-local") providerLabel = "Local Ollama";
+  else if (provider === "bedrock") providerLabel = "AWS Bedrock";
 
   const token = fetchGatewayAuthTokenFromSandbox(sandboxName);
 
@@ -2324,7 +2538,7 @@ async function onboard(opts = {}) {
   delete process.env.OPENSHELL_GATEWAY;
 
   console.log("");
-  console.log("  NemoClaw Onboarding");
+  console.log("  GovClaw Onboarding");
   if (isNonInteractive()) note("  (non-interactive mode)");
   console.log("  ===================");
 

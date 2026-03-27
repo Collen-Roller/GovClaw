@@ -3,6 +3,14 @@
 
 const INFERENCE_ROUTE_URL = "https://inference.local/v1";
 const DEFAULT_CLOUD_MODEL = "nvidia/nemotron-3-super-120b-a12b";
+const DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-sonnet-4-20250514-v1:0";
+const BEDROCK_MODEL_OPTIONS = [
+  { id: "us.anthropic.claude-sonnet-4-20250514-v1:0", label: "Claude Sonnet 4 (Anthropic)" },
+  { id: "us.anthropic.claude-3-5-sonnet-20241022-v2:0", label: "Claude 3.5 Sonnet v2 (Anthropic)" },
+  { id: "us.meta.llama3-3-70b-instruct-v1:0", label: "Llama 3.3 70B (Meta)" },
+  { id: "us.amazon.nova-pro-v1:0", label: "Nova Pro (Amazon)" },
+  { id: "mistral.mistral-large-2407-v1:0", label: "Mistral Large (Mistral)" },
+];
 const CLOUD_MODEL_OPTIONS = [
   { id: "nvidia/nemotron-3-super-120b-a12b", label: "Nemotron 3 Super 120B" },
   { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5" },
@@ -107,14 +115,29 @@ function getProviderSelectionConfig(provider, model) {
         provider,
         providerLabel: "Local Ollama",
       };
+    case "bedrock":
+      return {
+        endpointType: "custom",
+        endpointUrl: INFERENCE_ROUTE_URL,
+        ncpPartner: null,
+        model: model || DEFAULT_BEDROCK_MODEL,
+        profile: DEFAULT_ROUTE_PROFILE,
+        credentialEnv: "AWS_BEARER_TOKEN_BEDROCK",
+        provider,
+        providerLabel: "AWS Bedrock",
+      };
     default:
       return null;
   }
 }
 
 function getOpenClawPrimaryModel(provider, model) {
-  const resolvedModel =
-    model || (provider === "ollama-local" ? DEFAULT_OLLAMA_MODEL : DEFAULT_CLOUD_MODEL);
+  let resolvedModel = model;
+  if (!resolvedModel) {
+    if (provider === "ollama-local") resolvedModel = DEFAULT_OLLAMA_MODEL;
+    else if (provider === "bedrock") resolvedModel = DEFAULT_BEDROCK_MODEL;
+    else resolvedModel = DEFAULT_CLOUD_MODEL;
+  }
   return resolvedModel ? `${MANAGED_PROVIDER_ID}/${resolvedModel}` : null;
 }
 
@@ -130,7 +153,9 @@ function parseGatewayInference(output) {
 }
 
 module.exports = {
+  BEDROCK_MODEL_OPTIONS,
   CLOUD_MODEL_OPTIONS,
+  DEFAULT_BEDROCK_MODEL,
   DEFAULT_CLOUD_MODEL,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_ROUTE_CREDENTIAL_ENV,

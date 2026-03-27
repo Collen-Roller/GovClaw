@@ -39,20 +39,20 @@ export function handleSlashCommand(
 function slashHelp(): PluginCommandResult {
   return {
     text: [
-      "**NemoClaw**",
+      "**GovClaw**",
       "",
-      "Usage: `/nemoclaw <subcommand>`",
+      "Usage: `/govclaw <subcommand>`",
       "",
       "Subcommands:",
       "  `status`  - Show sandbox, blueprint, and inference state",
       "  `eject`   - Show rollback instructions",
       "  `onboard` - Show onboarding status and instructions",
       "",
-      "For full management use the NemoClaw CLI:",
-      "  `nemoclaw <name> status`",
-      "  `nemoclaw <name> connect`",
-      "  `nemoclaw <name> logs`",
-      "  `nemoclaw <name> destroy`",
+      "For full management use the GovClaw CLI:",
+      "  `govclaw <name> status`",
+      "  `govclaw <name> connect`",
+      "  `govclaw <name> logs`",
+      "  `govclaw <name> destroy`",
     ].join("\n"),
   };
 }
@@ -62,12 +62,12 @@ function slashStatus(): PluginCommandResult {
 
   if (!state.lastAction) {
     return {
-      text: "**NemoClaw**: No operations performed yet. Run `nemoclaw onboard` to get started.",
+      text: "**GovClaw**: No operations performed yet. Run `govclaw onboard` to get started.",
     };
   }
 
   const lines = [
-    "**NemoClaw Status**",
+    "**GovClaw Status**",
     "",
     `Last action: ${state.lastAction}`,
     `Blueprint: ${state.blueprintVersion ?? "unknown"}`,
@@ -88,7 +88,7 @@ function slashOnboard(): PluginCommandResult {
   if (config) {
     return {
       text: [
-        "**NemoClaw Onboard Status**",
+        "**GovClaw Onboard Status**",
         "",
         `Endpoint: ${describeOnboardEndpoint(config)}`,
         `Provider: ${describeOnboardProvider(config)}`,
@@ -98,7 +98,7 @@ function slashOnboard(): PluginCommandResult {
         `Profile: ${config.profile}`,
         `Onboarded: ${config.onboardedAt}`,
         "",
-        "To reconfigure, run: `nemoclaw onboard`",
+        "To reconfigure, run: `govclaw onboard`",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -106,12 +106,12 @@ function slashOnboard(): PluginCommandResult {
   }
   return {
     text: [
-      "**NemoClaw Onboarding**",
+      "**GovClaw Onboarding**",
       "",
       "No configuration found. Run the onboard command to set up inference:",
       "",
       "```",
-      "nemoclaw onboard",
+      "govclaw onboard",
       "```",
     ].join("\n"),
   };
@@ -121,7 +121,7 @@ function slashEject(): PluginCommandResult {
   const state = loadState();
 
   if (!state.lastAction) {
-    return { text: "No NemoClaw deployment found. Nothing to eject from." };
+    return { text: "No GovClaw deployment found. Nothing to eject from." };
   }
 
   if (!state.migrationSnapshot && !state.hostBackupPath) {
@@ -132,12 +132,12 @@ function slashEject(): PluginCommandResult {
 
   return {
     text: [
-      "**Eject from NemoClaw**",
+      "**Eject from GovClaw**",
       "",
       "To rollback to your host OpenClaw installation, run:",
       "",
       "```",
-      "nemoclaw <name> destroy",
+      "govclaw <name> destroy",
       "```",
       "",
       `Snapshot: ${state.migrationSnapshot ?? state.hostBackupPath ?? "none"}`,

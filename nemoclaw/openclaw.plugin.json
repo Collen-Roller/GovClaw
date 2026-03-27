@@ -1,8 +1,8 @@
 {
-  "id": "nemoclaw",
-  "name": "NemoClaw",
+  "id": "govclaw",
+  "name": "GovClaw",
   "version": "0.1.0",
-  "description": "Migrate and run OpenClaw inside OpenShell with optional NIM-backed inference",
+  "description": "Run OpenClaw inside OpenShell with gov-ready inference (Bedrock, NIM, Ollama)",
   "configSchema": {
     "type": "object",
     "properties": {

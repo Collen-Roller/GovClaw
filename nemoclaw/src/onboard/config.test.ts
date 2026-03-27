@@ -92,6 +92,7 @@ describe("onboard/config", () => {
       ["vllm", "Local vLLM"],
       ["nim-local", "Local NVIDIA NIM"],
       ["ncp", "NVIDIA Cloud Partner"],
+      ["bedrock", "AWS Bedrock"],
       ["custom", "Other OpenAI-compatible endpoint"],
     ];
 

@@ -11,6 +11,7 @@ profiles:
   - ncp
   - nim-local
   - vllm
+  - bedrock
 
 description: |
   NemoClaw blueprint: orchestrates OpenClaw sandbox creation, migration,
@@ -42,7 +43,7 @@ components:
       nim-local:
         provider_type: "openai"
         provider_name: "nim-local"
-        endpoint: "http://nim-service.local:8000/v1"
+        endpoint: "http://host.docker.internal:8000/v1"
         model: "nvidia/nemotron-3-super-120b-a12b"
         credential_env: "NIM_API_KEY"
 
@@ -53,6 +54,14 @@ components:
         model: "nvidia/nemotron-3-nano-30b-a3b"
         credential_env: "OPENAI_API_KEY"
         credential_default: "dummy"
+
+      bedrock:
+        provider_type: "openai"
+        provider_name: "bedrock"
+        endpoint: "https://bedrock-runtime.us-east-1.amazonaws.com"
+        model: "us.anthropic.claude-sonnet-4-20250514-v1:0"
+        credential_env: "AWS_BEARER_TOKEN_BEDROCK"
+        credential_env_fallback: "AWS_ACCESS_KEY_ID"
 
   policy:
     base: "sandboxes/openclaw/policy.yaml"

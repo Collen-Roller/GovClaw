@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import { describe, it, expect } from "vitest";
 
 import {
+  BEDROCK_MODEL_OPTIONS,
   CLOUD_MODEL_OPTIONS,
+  DEFAULT_BEDROCK_MODEL,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_ROUTE_CREDENTIAL_ENV,
   DEFAULT_ROUTE_PROFILE,
@@ -126,6 +128,24 @@ describe("inference selection config", () => {
     });
   });
 
+  it("maps bedrock to the sandbox inference route and default model", () => {
+    expect(getProviderSelectionConfig("bedrock")).toEqual({
+      endpointType: "custom",
+      endpointUrl: INFERENCE_ROUTE_URL,
+      ncpPartner: null,
+      model: DEFAULT_BEDROCK_MODEL,
+      profile: DEFAULT_ROUTE_PROFILE,
+      credentialEnv: "AWS_BEARER_TOKEN_BEDROCK",
+      provider: "bedrock",
+      providerLabel: "AWS Bedrock",
+    });
+  });
+
+  it("exposes curated Bedrock model picker options", () => {
+    expect(BEDROCK_MODEL_OPTIONS.length).toBeGreaterThan(0);
+    expect(BEDROCK_MODEL_OPTIONS[0].id).toBe("us.anthropic.claude-sonnet-4-20250514-v1:0");
+  });
+
   it("returns null for unknown providers", () => {
     expect(getProviderSelectionConfig("bogus-provider")).toBe(null);
   });
@@ -145,6 +165,10 @@ describe("inference selection config", () => {
 
   it("builds a default OpenClaw primary model for non-ollama providers", () => {
     expect(getOpenClawPrimaryModel("nvidia-prod")).toBe(`${MANAGED_PROVIDER_ID}/nvidia/nemotron-3-super-120b-a12b`);
+  });
+
+  it("builds a qualified OpenClaw primary model for bedrock", () => {
+    expect(getOpenClawPrimaryModel("bedrock")).toBe(`${MANAGED_PROVIDER_ID}/${DEFAULT_BEDROCK_MODEL}`);
   });
 });
 

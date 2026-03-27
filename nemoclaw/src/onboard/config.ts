@@ -16,6 +16,7 @@ export type EndpointType =
   | "nim-local"
   | "vllm"
   | "ollama"
+  | "bedrock"
   | "custom";
 
 export interface NemoClawOnboardConfig {
@@ -60,6 +61,8 @@ export function describeOnboardProvider(config: NemoClawOnboardConfig): string {
       return "Local NVIDIA NIM";
     case "ncp":
       return "NVIDIA Cloud Partner";
+    case "bedrock":
+      return "AWS Bedrock";
     case "custom":
       return "Other OpenAI-compatible endpoint";
     default:
