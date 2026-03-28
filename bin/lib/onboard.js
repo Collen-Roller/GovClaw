@@ -21,7 +21,6 @@ const {
   validateLocalProvider,
 } = require("./local-inference");
 const {
-  BEDROCK_MODEL_OPTIONS,
   CLOUD_MODEL_OPTIONS,
   DEFAULT_BEDROCK_MODEL,
   DEFAULT_CLOUD_MODEL,
@@ -114,6 +113,18 @@ const REMOTE_PROVIDER_CONFIG = {
     defaultModel: "",
     skipVerify: true,
   },
+  bedrock: {
+    label: "AWS Bedrock",
+    providerName: "bedrock",
+    providerType: "openai",
+    credentialEnv: "AWS_BEARER_TOKEN_BEDROCK",
+    endpointUrl: "",
+    helpUrl: "https://console.aws.amazon.com/bedrock/home#/api-keys",
+    modelMode: "catalog",
+    defaultModel: DEFAULT_BEDROCK_MODEL,
+    skipVerify: true,
+    requiresProxy: false,
+  },
 };
 
 const REMOTE_MODEL_OPTIONS = {
@@ -135,6 +146,13 @@ const REMOTE_MODEL_OPTIONS = {
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
+  ],
+  bedrock: [
+    "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "us.meta.llama3-3-70b-instruct-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "mistral.mistral-large-2407-v1:0",
   ],
 };
 
@@ -407,6 +425,47 @@ function upsertProvider(name, type, credentialEnv, baseUrl, env = {}) {
   }
 }
 
+async function ensureBedrockRegion() {
+  if (process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION) {
+    console.log(`  ✓ AWS region: ${process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION}`);
+    return;
+  }
+  const configFile = path.join(os.homedir(), ".aws", "config");
+  try {
+    const content = fs.readFileSync(configFile, "utf-8");
+    const m = content.match(/^\s*region\s*=\s*(.+)$/m);
+    if (m) {
+      process.env.AWS_REGION = m[1].trim();
+      console.log(`  ✓ AWS region (from ~/.aws/config): ${process.env.AWS_REGION}`);
+      return;
+    }
+  } catch {}
+  if (isNonInteractive()) {
+    process.env.AWS_REGION = "us-east-1";
+    note("  [non-interactive] Defaulting to AWS region: us-east-1");
+    return;
+  }
+  const entered = await prompt("  AWS region (e.g. us-east-1) [us-east-1]: ");
+  process.env.AWS_REGION = (entered || "").trim() || "us-east-1";
+}
+
+function startLitellmProxy(region, apiKey) {
+  const proxyScript = path.join(ROOT, "scripts", "litellm-proxy.sh");
+  if (!fs.existsSync(proxyScript)) {
+    console.error("  LiteLLM proxy script not found. Bedrock requires scripts/litellm-proxy.sh.");
+    process.exit(1);
+  }
+  const env = { AWS_REGION: region || "us-east-1" };
+  if (apiKey) env.AWS_BEARER_TOKEN_BEDROCK = apiKey;
+  if (process.env.AWS_ACCESS_KEY_ID) env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+  if (process.env.AWS_SECRET_ACCESS_KEY) env.AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+  const envPrefix = Object.entries(env)
+    .map(([k, v]) => `${k}=${shellQuote(v)}`)
+    .join(" ");
+  console.log("  Starting LiteLLM proxy for Bedrock...");
+  run(`${envPrefix} bash ${shellQuote(proxyScript)} start`, { ignoreError: false });
+}
+
 function verifyInferenceRoute(_provider, _model) {
   const output = runCaptureOpenshell(["inference", "get"], { ignoreError: true });
   if (!output || /Gateway inference:\s*[\r\n]+\s*Not configured/i.test(output)) {
@@ -486,6 +545,12 @@ function getSandboxInferenceConfig(model, provider = null, preferredInferenceApi
       inferenceCompat = {
         supportsStore: false,
       };
+      break;
+    case "bedrock":
+      providerKey = "bedrock";
+      primaryModelRef = `bedrock/${model}`;
+      inferenceBaseUrl = "https://inference.local";
+      inferenceApi = "bedrock-converse-stream";
       break;
     case "nvidia-prod":
     case "nvidia-nim":
@@ -981,139 +1046,47 @@ async function promptCloudModel() {
   );
 }
 
-async function promptBedrockModel() {
-  console.log("");
-  console.log("  Bedrock models:");
-  BEDROCK_MODEL_OPTIONS.forEach((option, index) => {
-    console.log(`    ${index + 1}) ${option.label} (${option.id})`);
-  });
-  console.log("");
-
-  const choice = await prompt("  Choose model [1]: ");
-  const index = parseInt(choice || "1", 10) - 1;
-  return (BEDROCK_MODEL_OPTIONS[index] || BEDROCK_MODEL_OPTIONS[0]).id;
-}
-
-function detectAwsProfiles() {
-  const credFile = path.join(os.homedir(), ".aws", "credentials");
+function fetchBedrockModels(region, apiKey) {
+  const endpoint = `https://bedrock.${region}.amazonaws.com/foundation-models?byOutputModality=TEXT&byInferenceType=ON_DEMAND`;
+  const bodyFile = path.join(os.tmpdir(), `govclaw-bedrock-models-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
   try {
-    const content = fs.readFileSync(credFile, "utf-8");
-    const profiles = [];
-    for (const line of content.split(/\r?\n/)) {
-      const m = line.match(/^\[(.+)\]$/);
-      if (m) profiles.push(m[1]);
-    }
-    return profiles;
-  } catch {
-    return [];
-  }
-}
-
-function detectAwsRegion() {
-  if (process.env.AWS_REGION) return process.env.AWS_REGION;
-  if (process.env.AWS_DEFAULT_REGION) return process.env.AWS_DEFAULT_REGION;
-  const configFile = path.join(os.homedir(), ".aws", "config");
-  try {
-    const content = fs.readFileSync(configFile, "utf-8");
-    const m = content.match(/^\s*region\s*=\s*(.+)$/m);
-    if (m) return m[1].trim();
-  } catch {}
-  return null;
-}
-
-async function ensureBedrockCredentials() {
-  const hasApiKey = !!process.env.AWS_BEARER_TOKEN_BEDROCK;
-  const hasKeys = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
-  const hasProfile = process.env.AWS_PROFILE;
-  const awsProfiles = detectAwsProfiles();
-  const detectedRegion = detectAwsRegion();
-
-  // ── Auth method ────────────────────────────────────────────
-  if (hasApiKey) {
-    console.log("  ✓ Using Bedrock API key from AWS_BEARER_TOKEN_BEDROCK");
-  } else if (hasKeys) {
-    console.log("  ✓ Using AWS IAM credentials from environment");
-  } else if (hasProfile) {
-    console.log(`  ✓ Using AWS profile: ${process.env.AWS_PROFILE}`);
-  } else if (isNonInteractive()) {
-    if (awsProfiles.length > 0) {
-      process.env.AWS_PROFILE = awsProfiles.includes("default") ? "default" : awsProfiles[0];
-      console.log(`  [non-interactive] Using AWS profile: ${process.env.AWS_PROFILE}`);
-    } else {
-      console.error("  AWS credentials are required for Bedrock in non-interactive mode.");
-      console.error("  Set AWS_BEARER_TOKEN_BEDROCK (API key), or");
-      console.error("      AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or AWS_PROFILE.");
-      process.exit(1);
-    }
-  } else {
-    const authOptions = [
-      { key: "apikey", label: "Bedrock API key (from AWS console)" },
-    ];
-    if (awsProfiles.length > 0) {
-      authOptions.push({ key: "profile", label: "AWS profile (~/.aws/credentials)" });
-    }
-    authOptions.push({ key: "iam", label: "IAM Access Key + Secret Key" });
-
-    console.log("");
-    console.log("  AWS credential source:");
-    authOptions.forEach((o, i) => {
-      console.log(`    ${i + 1}) ${o.label}`);
+    const cmd = [
+      "curl -sS",
+      ...getCurlTimingArgs(),
+      `-o ${shellQuote(bodyFile)}`,
+      "-w '%{http_code}'",
+      ...(apiKey ? ['-H "Authorization: Bearer $GOVCLAW_BEDROCK_KEY"'] : []),
+      shellQuote(endpoint),
+    ].join(" ");
+    const result = spawnSync("bash", ["-c", cmd], {
+      cwd: ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GOVCLAW_BEDROCK_KEY: apiKey || "",
+      },
     });
-    console.log("");
-    const authChoice = await prompt("  Choose [1]: ");
-    const authIdx = parseInt(authChoice || "1", 10) - 1;
-    const selected = authOptions[authIdx] || authOptions[0];
-
-    if (selected.key === "apikey") {
-      const apiKey = await prompt("  Bedrock API key: ");
-      if (!apiKey || !apiKey.trim()) {
-        console.error("  Bedrock API key is required.");
-        process.exit(1);
-      }
-      process.env.AWS_BEARER_TOKEN_BEDROCK = apiKey.trim();
-      console.log("  ✓ Bedrock API key set");
-    } else if (selected.key === "profile") {
-      console.log("");
-      console.log("  AWS profiles:");
-      awsProfiles.forEach((p, i) => {
-        console.log(`    ${i + 1}) ${p}`);
-      });
-      console.log("");
-      const defaultProfileIdx = awsProfiles.indexOf("default");
-      const profileDefault = defaultProfileIdx >= 0 ? defaultProfileIdx + 1 : 1;
-      const profileChoice = await prompt(`  Choose profile [${profileDefault}]: `);
-      const pidx = parseInt(profileChoice || String(profileDefault), 10) - 1;
-      const selectedProfile = awsProfiles[pidx] || awsProfiles[profileDefault - 1];
-      process.env.AWS_PROFILE = selectedProfile;
-      console.log(`  ✓ Using AWS profile: ${selectedProfile}`);
-    } else {
-      const accessKey = await prompt("  AWS_ACCESS_KEY_ID: ");
-      const secretKey = await prompt("  AWS_SECRET_ACCESS_KEY: ");
-      if (!accessKey || !secretKey) {
-        console.error("  Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required.");
-        process.exit(1);
-      }
-      process.env.AWS_ACCESS_KEY_ID = accessKey.trim();
-      process.env.AWS_SECRET_ACCESS_KEY = secretKey.trim();
+    const body = fs.existsSync(bodyFile) ? fs.readFileSync(bodyFile, "utf8") : "";
+    const status = Number(String(result.stdout || "").trim());
+    if (result.status !== 0 || !(status >= 200 && status < 300)) {
+      return null;
     }
-  }
-
-  // ── Region ─────────────────────────────────────────────────
-  if (!process.env.AWS_REGION && !process.env.AWS_DEFAULT_REGION) {
-    if (detectedRegion) {
-      process.env.AWS_REGION = detectedRegion;
-      console.log(`  ✓ AWS region (from config): ${detectedRegion}`);
-    } else if (isNonInteractive()) {
-      process.env.AWS_REGION = "us-east-1";
-      console.log("  [non-interactive] Defaulting to AWS region: us-east-1");
-    } else {
-      const entered = await prompt("  AWS region (e.g. us-east-1) [us-east-1]: ");
-      process.env.AWS_REGION = (entered || "").trim() || "us-east-1";
-    }
-  } else {
-    console.log(`  ✓ AWS region: ${process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION}`);
+    const parsed = JSON.parse(body);
+    const summaries = Array.isArray(parsed?.modelSummaries) ? parsed.modelSummaries : [];
+    return summaries
+      .filter((m) => m.modelId && m.modelName)
+      .map((m) => ({
+        id: m.modelId,
+        label: `${m.modelName} (${m.providerName || "unknown"})`,
+      }));
+  } catch {
+    return null;
+  } finally {
+    fs.rmSync(bodyFile, { force: true });
   }
 }
+
+
 
 async function promptRemoteModel(label, providerKey, defaultModel, validator = null) {
   const options = REMOTE_MODEL_OPTIONS[providerKey] || [];
@@ -1632,6 +1605,18 @@ async function createSandbox(gpu, model, provider, preferredInferenceApi = null)
   // See: crates/openshell-sandbox/src/proxy.rs (header stripping),
   //      crates/openshell-router/src/backend.rs (server-side auth injection).
   const envArgs = [formatEnvAssignment("CHAT_UI_URL", chatUiUrl)];
+
+  // Pass Bedrock credentials into the sandbox runtime environment
+  // so OpenClaw's bedrock-converse-stream provider can authenticate.
+  if (provider === "bedrock") {
+    const bedrockKey = getCredential("AWS_BEARER_TOKEN_BEDROCK") || process.env.AWS_BEARER_TOKEN_BEDROCK;
+    if (bedrockKey) {
+      envArgs.push(formatEnvAssignment("AWS_BEARER_TOKEN_BEDROCK", bedrockKey));
+    }
+    const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+    envArgs.push(formatEnvAssignment("AWS_REGION", awsRegion));
+  }
+
   const sandboxEnv = { ...process.env };
   delete sandboxEnv.NVIDIA_API_KEY;
   const discordToken = getCredential("DISCORD_BOT_TOKEN") || process.env.DISCORD_BOT_TOKEN;
@@ -1840,6 +1825,10 @@ async function setupNim(gpu) {
           console.error("  Endpoint URL is required for Other Anthropic-compatible endpoint.");
           process.exit(1);
         }
+      } else if (selected.key === "bedrock") {
+        await ensureBedrockRegion();
+        const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+        endpointUrl = `https://bedrock-runtime.${awsRegion}.amazonaws.com`;
       }
 
       if (selected.key === "build") {
@@ -1861,6 +1850,33 @@ async function setupNim(gpu) {
         } else {
           await ensureNamedCredential(credentialEnv, remoteConfig.label + " API key", remoteConfig.helpUrl);
         }
+
+        // Validate Bedrock API key immediately after it's set
+        if (selected.key === "bedrock") {
+          const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+          const testKey = getCredential(credentialEnv);
+          if (testKey) {
+            console.log("  Testing Bedrock API key...");
+            const testModels = fetchBedrockModels(region, testKey);
+            if (testModels === null) {
+              console.error("");
+              console.error("  ✗ Bedrock API key validation failed.");
+              console.error("    The key may be expired, invalid, or not authorized for this region.");
+              if (isNonInteractive()) {
+                process.exit(1);
+              }
+              const retry = await prompt("  Try a different key? [Y/n]: ");
+              if (retry.trim().toLowerCase() !== "n") {
+                saveCredential(credentialEnv, "");
+                process.env[credentialEnv] = "";
+                continue selectionLoop;
+              }
+              process.exit(1);
+            }
+            console.log(`  ✓ Bedrock API key valid (${testModels.length} models available in ${region})`);
+          }
+        }
+
         const defaultModel = requestedModel || remoteConfig.defaultModel;
         let modelValidator = null;
         if (selected.key === "openai" || selected.key === "gemini") {
@@ -1872,7 +1888,36 @@ async function setupNim(gpu) {
         }
         while (true) {
           if (isNonInteractive()) {
-            model = defaultModel;
+            if (selected.key === "bedrock" && !requestedModel) {
+              const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+              const fetched = fetchBedrockModels(region, getCredential(credentialEnv));
+              model = (fetched && fetched.length > 0) ? fetched[0].id : defaultModel;
+            } else {
+              model = defaultModel;
+            }
+          } else if (remoteConfig.modelMode === "catalog" && selected.key === "bedrock") {
+            const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+            const apiKey = getCredential(credentialEnv);
+            console.log("  Fetching available Bedrock models...");
+            const fetched = fetchBedrockModels(region, apiKey);
+            if (fetched && fetched.length > 0) {
+              console.log(`  Found ${fetched.length} models in ${region}`);
+              console.log("");
+              console.log(`  ${remoteConfig.label} models:`);
+              fetched.forEach((m, i) => { console.log(`    ${i + 1}) ${m.label}`); });
+              console.log(`    ${fetched.length + 1}) Other...`);
+              console.log("");
+              const choice = await prompt("  Choose model [1]: ");
+              const idx = parseInt(choice || "1", 10) - 1;
+              if (idx >= 0 && idx < fetched.length) {
+                model = fetched[idx].id;
+              } else {
+                model = await promptInputModel(remoteConfig.label, defaultModel, modelValidator);
+              }
+            } else {
+              console.log("  Could not fetch models from Bedrock API — using default list.");
+              model = await promptRemoteModel(remoteConfig.label, selected.key, defaultModel, modelValidator);
+            }
           } else if (remoteConfig.modelMode === "curated") {
             model = await promptRemoteModel(remoteConfig.label, selected.key, defaultModel, modelValidator);
           } else {
@@ -1907,6 +1952,12 @@ async function setupNim(gpu) {
             if (validation.retry === "selection") {
               continue selectionLoop;
             }
+          } else if (selected.key === "bedrock") {
+            // Bedrock validation happens via fetchBedrockModels earlier;
+            // endpoint validation is skipped because the LiteLLM proxy
+            // isn't started until setupInference.
+            preferredInferenceApi = "openai-chat";
+            break;
           } else {
             const retryMessage = "Please choose a provider/model again.";
             if (selected.key === "anthropic") {
@@ -2121,17 +2172,6 @@ async function setupNim(gpu) {
         continue selectionLoop;
       }
       break;
-    } else if (selected.key === "bedrock") {
-      console.log("  ✓ Using AWS Bedrock");
-      provider = "bedrock";
-      await ensureBedrockCredentials();
-      if (isNonInteractive()) {
-        model = requestedModel || DEFAULT_BEDROCK_MODEL;
-        note(`  [non-interactive] Bedrock model: ${model}`);
-      } else {
-        model = await promptBedrockModel();
-      }
-      break;
     }
   }
   }
@@ -2145,14 +2185,29 @@ async function setupInference(sandboxName, model, provider, endpointUrl = null, 
   step(4, 7, "Setting up inference provider");
   runOpenshell(["gateway", "select", GATEWAY_NAME], { ignoreError: true });
 
-  if (provider === "nvidia-prod" || provider === "nvidia-nim" || provider === "openai-api" || provider === "anthropic-prod" || provider === "compatible-anthropic-endpoint" || provider === "gemini-api" || provider === "compatible-endpoint") {
+  if (provider === "nvidia-prod" || provider === "nvidia-nim" || provider === "openai-api" || provider === "anthropic-prod" || provider === "compatible-anthropic-endpoint" || provider === "gemini-api" || provider === "compatible-endpoint" || provider === "bedrock") {
     const config = provider === "nvidia-nim"
       ? REMOTE_PROVIDER_CONFIG.build
       : Object.values(REMOTE_PROVIDER_CONFIG).find((entry) => entry.providerName === provider);
+    if (config && config.requiresProxy) {
+      startLitellmProxy(
+        process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1",
+        getCredential(config.credentialEnv)
+      );
+    }
     const resolvedCredentialEnv = credentialEnv || (config && config.credentialEnv);
     const resolvedEndpointUrl = endpointUrl || (config && config.endpointUrl);
-    const env = resolvedCredentialEnv ? { [resolvedCredentialEnv]: process.env[resolvedCredentialEnv] } : {};
-    upsertProvider(provider, config.providerType, resolvedCredentialEnv, resolvedEndpointUrl, env);
+    let env;
+    let providerCredEnv;
+    if (provider === "bedrock") {
+      const bedrockKey = getCredential("AWS_BEARER_TOKEN_BEDROCK") || process.env.AWS_BEARER_TOKEN_BEDROCK || "";
+      env = { AWS_BEARER_TOKEN_BEDROCK: bedrockKey };
+      providerCredEnv = "AWS_BEARER_TOKEN_BEDROCK";
+    } else {
+      env = resolvedCredentialEnv ? { [resolvedCredentialEnv]: getCredential(resolvedCredentialEnv) || process.env[resolvedCredentialEnv] || "" } : {};
+      providerCredEnv = resolvedCredentialEnv;
+    }
+    upsertProvider(provider, config.providerType, providerCredEnv, resolvedEndpointUrl, env);
     const args = ["inference", "set"];
     if (config.skipVerify) {
       args.push("--no-verify");
@@ -2189,48 +2244,6 @@ async function setupInference(sandboxName, model, provider, endpointUrl = null, 
       console.error(`  ${probe.message}`);
       process.exit(1);
     }
-  } else if (provider === "bedrock") {
-    const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
-    const bedrockBaseUrl = `https://bedrock-runtime.${awsRegion}.amazonaws.com`;
-
-    if (process.env.AWS_BEARER_TOKEN_BEDROCK) {
-      // API key auth — register as OpenAI-compatible provider with Bearer token
-      run(
-        `AWS_BEARER_TOKEN_BEDROCK=${shellQuote(process.env.AWS_BEARER_TOKEN_BEDROCK)} ` +
-        `openshell provider create --name bedrock --type openai ` +
-        `--credential "AWS_BEARER_TOKEN_BEDROCK" ` +
-        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || ` +
-        `AWS_BEARER_TOKEN_BEDROCK=${shellQuote(process.env.AWS_BEARER_TOKEN_BEDROCK)} ` +
-        `openshell provider update bedrock ` +
-        `--credential "AWS_BEARER_TOKEN_BEDROCK" ` +
-        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || true`,
-        { ignoreError: true }
-      );
-    } else {
-      // IAM / profile auth
-      const envPairs = [`AWS_REGION=${awsRegion}`];
-      if (process.env.AWS_ACCESS_KEY_ID) envPairs.push(`AWS_ACCESS_KEY_ID=${process.env.AWS_ACCESS_KEY_ID}`);
-      if (process.env.AWS_SECRET_ACCESS_KEY) envPairs.push(`AWS_SECRET_ACCESS_KEY=${process.env.AWS_SECRET_ACCESS_KEY}`);
-      if (process.env.AWS_SESSION_TOKEN) envPairs.push(`AWS_SESSION_TOKEN=${process.env.AWS_SESSION_TOKEN}`);
-      if (process.env.AWS_PROFILE) envPairs.push(`AWS_PROFILE=${process.env.AWS_PROFILE}`);
-
-      const envPrefix = envPairs.join(" ");
-      run(
-        `${envPrefix} ` +
-        `openshell provider create --name bedrock --type openai ` +
-        `--credential "AWS_ACCESS_KEY_ID" ` +
-        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || ` +
-        `${envPrefix} ` +
-        `openshell provider update bedrock ` +
-        `--credential "AWS_ACCESS_KEY_ID" ` +
-        `--config "OPENAI_BASE_URL=${bedrockBaseUrl}" 2>&1 || true`,
-        { ignoreError: true }
-      );
-    }
-    run(
-      `openshell inference set --no-verify --provider bedrock --model ${shellQuote(model)} 2>/dev/null || true`,
-      { ignoreError: true }
-    );
   }
 
   verifyInferenceRoute(provider, model);
@@ -2507,9 +2520,9 @@ function printDashboard(sandboxName, model, provider, nimContainer = null) {
   console.log(`  Model        ${model} (${providerLabel})`);
   console.log(`  NIM          ${nimLabel}`);
   console.log(`  ${"─".repeat(50)}`);
-  console.log(`  Run:         nemoclaw ${sandboxName} connect`);
-  console.log(`  Status:      nemoclaw ${sandboxName} status`);
-  console.log(`  Logs:        nemoclaw ${sandboxName} logs --follow`);
+  console.log(`  Run:         govclaw ${sandboxName} connect`);
+  console.log(`  Status:      govclaw ${sandboxName} status`);
+  console.log(`  Logs:        govclaw ${sandboxName} logs --follow`);
   console.log("");
   if (token) {
     console.log("  OpenClaw UI (tokenized URL; treat it like a password)");

@@ -414,7 +414,7 @@ printf '%s' "$status"
 const credentials = require(${credentialsPath});
 const runner = require(${runnerPath});
 
-const answers = ["7", "1"];
+const answers = ["8", "1"];
 const messages = [];
 const commands = [];
 
@@ -519,7 +519,7 @@ exit 0
 const credentials = require(${credentialsPath});
 const runner = require(${runnerPath});
 
-const answers = ["7", "1"];
+const answers = ["8", "1"];
 const messages = [];
 
 credentials.prompt = async (message) => {
@@ -624,7 +624,7 @@ exit 0
 const credentials = require(${credentialsPath});
 const runner = require(${runnerPath});
 
-const answers = ["7", "1", "2", "llama3.2:3b"];
+const answers = ["8", "1", "2", "llama3.2:3b"];
 const messages = [];
 
 credentials.prompt = async (message) => {

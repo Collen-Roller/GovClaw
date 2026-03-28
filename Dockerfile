@@ -91,11 +91,12 @@ parsed = urlparse(chat_ui_url); \
 chat_origin = f'{parsed.scheme}://{parsed.netloc}' if parsed.scheme and parsed.netloc else 'http://127.0.0.1:18789'; \
 origins = ['http://127.0.0.1:18789']; \
 origins = list(dict.fromkeys(origins + [chat_origin])); \
+auth_fields = {'auth': 'aws-sdk'} if inference_api == 'bedrock-converse-stream' else {'apiKey': 'unused'}; \
 providers = { \
     provider_key: { \
         'baseUrl': inference_base_url, \
-        'apiKey': 'unused', \
         'api': inference_api, \
+        **auth_fields, \
         'models': [{**({'compat': inference_compat} if inference_compat else {}), 'id': model, 'name': primary_model_ref, 'reasoning': False, 'input': ['text'], 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0}, 'contextWindow': 131072, 'maxTokens': 4096}] \
     } \
 }; \

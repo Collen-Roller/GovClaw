@@ -9,7 +9,7 @@ adding features for secure AI agent sandboxing in government and defense environ
 
 ### Added
 
-- **AWS Bedrock inference provider** — New option 3 in the setup script.
+- **AWS Bedrock inference provider** — New option in the setup script.
   Supports three auth methods:
   - Bedrock API key (`AWS_BEARER_TOKEN_BEDROCK`) — simplest, single token from AWS console
   - AWS profile (`~/.aws/credentials`) — auto-detected, profile picker in setup
@@ -41,6 +41,24 @@ adding features for secure AI agent sandboxing in government and defense environ
 - **Test coverage** for all new Bedrock functionality
   - `test/inference-config.test.js` — provider mapping, model options, primary model resolution
   - `nemoclaw/src/onboard/config.test.ts` — endpoint type label mapping
+
+- **LiteLLM proxy for Bedrock** (`scripts/litellm-proxy.sh`) — Automatically started
+  during Bedrock onboarding. Translates OpenAI-format requests from OpenShell into
+  Bedrock Converse API calls, enabling Claude, Llama, Nova, and Mistral models
+  (Bedrock's native OpenAI endpoint only supports GPT OSS models).
+  - Runs on `127.0.0.1:4000`, managed via PID file
+  - Config generated dynamically from AWS credentials
+  - Integrated into `govclaw status` service display
+  - Installed as a pip dependency during `govclaw-install.sh`
+
+- **Dynamic Bedrock model discovery** — After entering API key and region, the
+  setup script fetches available models from the Bedrock `ListFoundationModels`
+  API and presents them as the model picker. Falls back to a hardcoded list if
+  the API call fails.
+
+- **Bedrock API key validation** — Credentials are tested immediately after entry
+  by calling the Bedrock API. Catches expired/invalid keys before creating the
+  sandbox, with option to re-enter.
 
 ### Fixed
 

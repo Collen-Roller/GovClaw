@@ -100,21 +100,38 @@ network_policies:
       - { path: /usr/bin/git }
 
   # ── AWS Bedrock inference ───────────────────────────────────────────
+  # Uses access: full (TLS passthrough) because OpenClaw's
+  # bedrock-converse-stream provider uses AWS SigV4 signing which
+  # breaks if TLS is terminated and re-signed by the proxy.
   bedrock:
     name: bedrock
     endpoints:
       - host: "*.amazonaws.com"
         port: 443
-        protocol: rest
-        enforcement: enforce
-        tls: terminate
-        rules:
-          - allow: { method: POST, path: "/model/*/invoke" }
-          - allow: { method: POST, path: "/model/*/converse" }
-          - allow: { method: POST, path: "/model/*/converse-stream" }
-          - allow: { method: POST, path: "/**" }
+        access: full
+      - host: bedrock-runtime.us-east-1.amazonaws.com
+        port: 443
+        access: full
+      - host: bedrock-runtime.us-east-2.amazonaws.com
+        port: 443
+        access: full
+      - host: bedrock-runtime.us-west-2.amazonaws.com
+        port: 443
+        access: full
+      - host: bedrock.us-east-1.amazonaws.com
+        port: 443
+        access: full
+      - host: bedrock.us-east-2.amazonaws.com
+        port: 443
+        access: full
+      - host: sts.amazonaws.com
+        port: 443
+        access: full
     binaries:
       - { path: /usr/local/bin/openclaw }
+      - { path: /usr/local/bin/node }
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/curl }
 
   # ── Local NIM inference ─────────────────────────────────────────────
   nim_local:

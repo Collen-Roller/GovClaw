@@ -104,6 +104,14 @@ show_status() {
       echo -e "  ${RED}●${NC} $svc  (stopped)"
     fi
   done
+
+  # LiteLLM proxy (GovClaw Bedrock support)
+  local litellm_pid="/tmp/govclaw-litellm/litellm.pid"
+  if [ -f "$litellm_pid" ] && kill -0 "$(cat "$litellm_pid")" 2>/dev/null; then
+    echo -e "  ${GREEN}●${NC} litellm-proxy  (PID $(cat "$litellm_pid"), port ${LITELLM_PORT:-4000})"
+  else
+    echo -e "  ${RED}●${NC} litellm-proxy  (stopped)"
+  fi
   echo ""
 
   if [ -f "$PIDDIR/cloudflared.log" ]; then
